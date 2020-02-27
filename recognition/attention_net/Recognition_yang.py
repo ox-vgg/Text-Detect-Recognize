@@ -36,6 +36,8 @@ parser.add_argument('--max_len', default=65, type=int)
 parser.add_argument("--cv", dest="context_vector", action = 'store_true')
 parser.add_argument('--alphabet', default=' 0123456789abcdefghijklmnopqrstuvwxyz', type=str)
 parser.add_argument('--detection_path', default='', type=str)
+parser.add_argument('--checkpoint', default='../attention_net/0_480000.pth', type=str)
+parser.add_argument('--output_path', default='', type=str)
 
 
 args, unknown = parser.parse_known_args()
@@ -49,7 +51,7 @@ os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
 device = torch.device("cuda:0")
 net = AN(args)
 net = torch.nn.DataParallel(net).to(device)
-checkpoint = '../attention_net/0_480000.pth'
+checkpoint = args.checkpoint
 load_file= torch.load(checkpoint)
 net.load_state_dict(load_file['model_state_dict'])
 net.eval()
@@ -67,6 +69,7 @@ frame_paths = list(data.keys())
 
 for image_name in frame_paths:
     img_path = image_name
+    print (img_path)
     all_boxes = data[img_path]
     img_raw = cv2.imread(img_path)
     temp_key =img_path
@@ -113,12 +116,13 @@ for image_name in frame_paths:
         #print (pred_str)
         #print (conf_score.cpu().detach().numpy())
         if conf_score>0.8:
-            text_result[temp_key].append(pred_str)
+            # Save coordinates, but swap them first becase the variable names are inverted
+            text_result[temp_key].append( [pred_str, y_min, x_min, y_max, x_max])
             #print (pred_str)   # uncomment if you want to see predict strings!!
             #print (pred_str)
 
  
         
-save_pickle_path ='Recognition.pkl'
+save_pickle_path = os.path.join(args.output_path, 'Recognition.pkl')
 with open (save_pickle_path,'wb') as f:
     pickle.dump(text_result, f)

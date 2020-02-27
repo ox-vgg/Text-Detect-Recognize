@@ -1,5 +1,10 @@
 #encoding = utf-8
 
+import sys
+import os
+DIR_PATH = os.path.dirname(os.path.realpath(__file__))
+sys.path.append(os.path.join(DIR_PATH, 'pylib/src/'))
+
 import numpy as np
 import math
 import tensorflow as tf
@@ -16,7 +21,7 @@ from pathlib import Path
 import tqdm
 import shutil
 import glob
-import os
+
 import time
 import pixel_link
 from nets import pixel_link_symbol
@@ -42,6 +47,10 @@ tf.app.flags.DEFINE_float('gpu_memory_fraction', -1,
 tf.app.flags.DEFINE_string(
     'dataset_dir', 'None', 
     'The directory where the dataset files are stored.')
+
+tf.app.flags.DEFINE_string(
+    'output_dir', 'None',
+    'The directory where the output file will be created')
 
 tf.app.flags.DEFINE_integer('eval_image_width', None, 'resized image width for inference')
 tf.app.flags.DEFINE_integer('eval_image_height',  None, 'resized image height for inference')
@@ -124,13 +133,11 @@ def test():
             frame_paths = f.readlines()
         
         frame_paths = [x.strip() for x in frame_paths] 
-        
-        print (frame_paths)
 
 
         for image_name in frame_paths:
             file_path = image_name
-
+            print (file_path)
             #temp=[]
             #file_path = util.io.join_path(FLAGS.dataset_dir, image_name)
             image_data = util.img.imread(file_path)
@@ -165,7 +172,7 @@ def test():
             final_result[file_path] = bboxes_det
 
 
-    save_path = 'Detection.pkl'
+    save_path = os.path.join(FLAGS.output_dir, 'Detection.pkl')
 
     f = open(save_path,"wb")
     pickle.dump(final_result,f)
