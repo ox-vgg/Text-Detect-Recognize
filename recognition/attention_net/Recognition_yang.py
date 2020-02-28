@@ -31,7 +31,7 @@ import time
 parser = argparse.ArgumentParser(description='AN')
 parser.add_argument('--load_width', default=256, type=int)
 parser.add_argument('--load_height', default=32, type=int)
-parser.add_argument("--gpus", dest="gpu", default="1", type=str)
+parser.add_argument("--gpus", dest="gpu", default="-1", type=str, help='Indicate the GPU number to use, or specify -1 to use the CPU')
 parser.add_argument('--max_len', default=65, type=int)
 parser.add_argument("--cv", dest="context_vector", action = 'store_true')
 parser.add_argument('--alphabet', default=' 0123456789abcdefghijklmnopqrstuvwxyz', type=str)
@@ -47,14 +47,23 @@ args, unknown = parser.parse_known_args()
 
 args.nClasses = len(args.alphabet)
 width, height = args.load_width, args.load_height
-os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
-device = torch.device("cuda:0")
+use_cuda = (args.gpu != "-1")
+print ("use_cuda", use_cuda)
+if use_cuda:
+    os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
+    device = torch.device("cuda:0")
+else:
+    device = torch.device("cpu")
 net = AN(args)
 net = torch.nn.DataParallel(net).to(device)
 checkpoint = args.checkpoint
-load_file= torch.load(checkpoint)
+if use_cuda:
+    load_file= torch.load(checkpoint)
+else:
+    load_file= torch.load(checkpoint, map_location='cpu')
 net.load_state_dict(load_file['model_state_dict'])
 net.eval()
+net = net.to(device)
 converter = strLabelConverter(args.alphabet)
 
 pickle_path = args.detection_path
@@ -101,7 +110,10 @@ for image_name in frame_paths:
 
         imgs = torch.from_numpy(img).permute(2, 0, 1).float()
         imgs= imgs.view(1, 3,32,256)
-        imgs = Variable(imgs).cuda()
+        if use_cuda:
+            imgs = Variable(imgs).cuda()
+        else:
+            imgs = Variable(imgs)
         gt_ind,_ = converter.encode('abc')
         gt_ind = torch.IntTensor((gt_ind + [0] * args.max_len)[:args.max_len])
         preds = net(imgs,gt_ind)

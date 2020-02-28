@@ -68,8 +68,9 @@ class BasicBlock(nn.Module):
 
 class LSTM_Att(nn.Module):
     """docstring for LSTM_Att"""
-    def __init__(self, input_size,hidden_size,attn_size,num_classes,context_vector):
+    def __init__(self, input_size,hidden_size,attn_size,num_classes,context_vector, use_cuda):
         super(LSTM_Att, self).__init__()
+        self.use_cuda = use_cuda
         self.hidden_size = hidden_size #256
         self.input_size = input_size #512
         self.output_size = num_classes #37
@@ -97,14 +98,21 @@ class LSTM_Att(nn.Module):
         assert len(labels)%batch_size==0, "length of labels {} is not divisible by batch_size {}".format(len(labels), batch_size)
 
         max_len = x.shape[1]
-        char_embeddings = torch.eye(self.output_size).cuda()
-        
+        if self.use_cuda:
+            char_embeddings = torch.eye(self.output_size).cuda()
+            outputs = torch.zeros(batch_size,max_len,self.output_size).cuda()
+            gts =torch.zeros(batch_size,max_len,self.input_size).cuda()
+            c_t = torch.zeros(batch_size,self.hidden_size).cuda()
+            s_t = torch.zeros(batch_size,self.hidden_size).cuda()
+            targets = torch.zeros(batch_size, max_len+1).long().cuda()
+        else:
+            char_embeddings = torch.eye(self.output_size)
+            outputs = torch.zeros(batch_size,max_len,self.output_size)
+            gts =torch.zeros(batch_size,max_len,self.input_size)
+            c_t = torch.zeros(batch_size,self.hidden_size)
+            s_t = torch.zeros(batch_size,self.hidden_size)
+            targets = torch.zeros(batch_size, max_len+1).long()
 
-        outputs = torch.zeros(batch_size,max_len,self.output_size).cuda()
-        gts =torch.zeros(batch_size,max_len,self.input_size).cuda()
-        c_t = torch.zeros(batch_size,self.hidden_size).cuda()
-        s_t = torch.zeros(batch_size,self.hidden_size).cuda()
-        targets = torch.zeros(batch_size, max_len+1).long().cuda()
         for b_ind in range(batch_size):
             targets[b_ind][1:] = labels[b_ind*max_len:(b_ind+1)*max_len]
 
@@ -117,13 +125,24 @@ class LSTM_Att(nn.Module):
             gt = torch.matmul(et,x).squeeze(1) #[batch,dim_input]
             if self.context_vector: gts[:,cell] = gt
             if self.training:
-                tf_embeddings = char_embeddings.index_select(0, targets.transpose(0,1)[cell]).cuda()
+                if self.use_cuda:
+                    tf_embeddings = char_embeddings.index_select(0, targets.transpose(0,1)[cell]).cuda()
+                else:
+                    tf_embeddings = char_embeddings.index_select(0, targets.transpose(0,1)[cell])
                 gt_tf = torch.cat([gt, tf_embeddings], 1)
             else:
-                if cell == 0:pre_pred = torch.zeros(1).long().cuda()
-                else: pre_pred = torch.argmax(y_t,dim =1)
+                if cell == 0:
+                    if self.use_cuda:
+                        pre_pred = torch.zeros(1).long().cuda()
+                    else:
+                        pre_pred = torch.zeros(1).long()
+                else:
+                    pre_pred = torch.argmax(y_t,dim =1)
 
-                pred_embeddings= char_embeddings.index_select(0, pre_pred).cuda()
+                if self.use_cuda:
+                    pred_embeddings= char_embeddings.index_select(0, pre_pred).cuda()
+                else:
+                    pred_embeddings= char_embeddings.index_select(0, pre_pred)
                 gt_tf = torch.cat([gt, pred_embeddings], 1)
 
             s_t,c_t = self.rnn(gt_tf,(s_t,c_t))
@@ -138,11 +157,12 @@ class LSTM_Att(nn.Module):
 class AN(nn.Module):
     def __init__(self, args):
         super(AN, self).__init__()
+        self.use_cuda = (args.gpu != "-1")
         self.nClasses = args.nClasses
         self.context_vector = args.context_vector
         self.blstm = nn.LSTM(input_size = 512, hidden_size = 256, num_layers=2,
             dropout = 0.2, bidirectional = True, batch_first = True)
-        self.lstm_att = LSTM_Att(512,256,256,args.nClasses,self.context_vector)
+        self.lstm_att = LSTM_Att(512,256,256,args.nClasses,self.context_vector, self.use_cuda)
         self.softmax = nn.Softmax(dim=-1)
 
         self.conv1_x = nn.Sequential(
