@@ -128,10 +128,9 @@ for image_name in frame_paths:
         #print (pred_str)
         #print (conf_score.cpu().detach().numpy())
         if conf_score>0.8:
-            # Save coordinates, but swap them first becase the variable names are inverted
-            text_result[temp_key].append( [pred_str, y_min, x_min, y_max, x_max])
+            # Save text, confidence and coordinates (but swap them first becase the variable names are inverted)
+            text_result[temp_key].append( [pred_str, conf_score.item(), y_min, x_min, y_max, x_max])
             #print (pred_str)   # uncomment if you want to see predict strings!!
-            #print (pred_str)
 
  
         
