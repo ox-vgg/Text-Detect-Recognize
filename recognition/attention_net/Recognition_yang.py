@@ -53,6 +53,7 @@ if use_cuda:
     os.environ["CUDA_VISIBLE_DEVICES"]=args.gpu
     device = torch.device("cuda:0")
 else:
+    os.environ["CUDA_VISIBLE_DEVICES"]=""
     device = torch.device("cpu")
 net = AN(args)
 net = torch.nn.DataParallel(net).to(device)
